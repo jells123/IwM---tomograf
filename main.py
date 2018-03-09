@@ -46,7 +46,7 @@ image = misc.imread('shepplogan3.png', flatten=True).astype('float64')
 
 print(image.shape)
 
-alpha = 0.75 #obrót tomografu
+alpha = 180. / image.shape[0] #obrót tomografu
 n = image.shape[0] #number of emiters
 l = 180. #rozpiętość kątowa (?)
 
@@ -64,21 +64,17 @@ sinogramData = np.ndarray(shape=(len(angles), len(emiters)), dtype = np.float32)
 
 for a, angle in enumerate(angles):
 
-    projection = np.zeros(shape=(image.shape[0]), dtype=np.float32)
-
     for idx, e in enumerate(emiters):
 
         x1, y1 = getCirclePoint(radius, angle + e, cx, cy)
         x2, y2 = getCirclePoint(radius, angle + 180. - e, cx, cy)
 
-        pixels = getBresenhamLine(x2, y2, x1, y1)
-        remaining = int((len(projection) - len(pixels)) / 2)
+        pixels = getBresenhamLine(x1, y1, x2, y2)
 
         sum = 0
         for p, px in enumerate(pixels):
             try:
                 sum += image[px[0]][px[1]]
-                projection[p+remaining] += image[px[0]][px[1]]
             except IndexError:
                 pass
 
@@ -87,9 +83,7 @@ for a, angle in enumerate(angles):
         #    cv2.line(image, (int(x1), int(y1)), (int(x2), int(y2)), (255, 255, 255), 1)
         #sinogramData[a][idx] = sum
 
-    #projection /= image.shape[0]
-    #sinogramData[a] = projection
-    print("Done! -> ", angle)
+    #print("Done! -> ", angle)
 
 sinogram = np.zeros(shape=(len(angles), image.shape[0]), dtype=np.float32)
 
