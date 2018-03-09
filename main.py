@@ -23,39 +23,6 @@ def getCirclePoint(radius, angle, x_origin, y_origin, degrees=True):
 
 def getBresenhamLine(x1, y1, x2, y2):
     result = []
-    '''
-    x, y = int(x1), int(y1)
-    if x1 < x2:
-        xi = 1; dx = x2 - x1
-    else:
-        xi = -1; dx = x1 - x2
-    if y1 < y2:
-        yi = 1; dy = y2 - y1
-    else:
-        yi = -1; dy = y1 - y2
-    result.append([x, y])
-
-    if dx > dy:
-        ai = 2 * (dy - dx)
-        bi = dy * 2
-        d = bi - dx
-        while x < x2:
-            if d >= 0:
-                x += xi; y += yi; d += ai
-            else:
-                d += bi; x += xi
-            result.append([x, y])
-    else:
-        ai = (dx - dy) * 2
-        bi = dx * 2
-        d = bi - dy
-        while y < y2:
-            if d >= 0:
-                x += xi; y += yi; d += ai
-            else:
-                d += bi; y += yi
-            result.append([x, y])
-    '''
     # https://gist.github.com/bert/1085538
     x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
     dx = np.abs(x2 - x1)
@@ -77,8 +44,10 @@ def getBresenhamLine(x1, y1, x2, y2):
 # Read image as 64bit float gray scale
 image = misc.imread('shepplogan3.png', flatten=True).astype('float64')
 
-alpha = 1 #obrót tomografu
-n = 90 #number of emiters
+print(image.shape)
+
+alpha = 0.75 #obrót tomografu
+n = image.shape[0] #number of emiters
 l = 180. #rozpiętość kątowa (?)
 
 if image.shape[0] != image.shape[1]:
@@ -91,7 +60,7 @@ angles  = list(np.arange(0., 180., alpha, dtype=np.float32))
 emiters = list(np.linspace(-l/2, l/2, n, dtype=np.float32))
 
 dist = l/n #angle distance between emiters
-sinogramData = np.ndarray(shape=(len(angles), image.shape[0]), dtype = np.float32)
+sinogramData = np.ndarray(shape=(len(angles), len(emiters)), dtype = np.float32)
 
 for a, angle in enumerate(angles):
 
@@ -99,40 +68,31 @@ for a, angle in enumerate(angles):
 
     for idx, e in enumerate(emiters):
 
-        x1, y1 = getCirclePoint(radius, 90. + angle + e, cx, cy)
-        x2, y2 = getCirclePoint(radius, 90. + angle + 180. - e, cx, cy)
+        x1, y1 = getCirclePoint(radius, angle + e, cx, cy)
+        x2, y2 = getCirclePoint(radius, angle + 180. - e, cx, cy)
 
         pixels = getBresenhamLine(x2, y2, x1, y1)
         remaining = int((len(projection) - len(pixels)) / 2)
 
-        for idx, px in enumerate(pixels):
+        sum = 0
+        for p, px in enumerate(pixels):
             try:
-                #sum += image[px[0]][px[1]]
-                projection[idx+remaining] += image[px[0]][px[1]]
+                sum += image[px[0]][px[1]]
+                projection[p+remaining] += image[px[0]][px[1]]
             except IndexError:
                 pass
 
+        sinogramData[a][idx] = sum
         #if sum == 0:
         #    cv2.line(image, (int(x1), int(y1)), (int(x2), int(y2)), (255, 255, 255), 1)
         #sinogramData[a][idx] = sum
 
-    projection /= image.shape[0]
-    sinogramData[a] = projection
+    #projection /= image.shape[0]
+    #sinogramData[a] = projection
+    print("Done! -> ", angle)
 
 sinogram = np.zeros(shape=(len(angles), image.shape[0]), dtype=np.float32)
 
-'''for angleIdx, s in enumerate(sinogramData):
-    angle = angleIdx * alpha
-    for emiterIdx, e in enumerate(s):
-        x1, y1 = getCirclePoint(radius, angle + e, cx, cy)
-        x2, y2 = getCirclePoint(radius, angle + 180 - e, cx, cy)
-        pixels = getBresenhamLine(x2, y2, x1, y1)
-        for px in pixels:
-            try:
-                sinogram[px[0]][px[1]] += e
-            except IndexError:
-                pass
-'''
 
 '''
 off = 0
