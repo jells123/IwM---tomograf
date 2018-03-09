@@ -23,6 +23,7 @@ def getCirclePoint(radius, angle, x_origin, y_origin, degrees=True):
 
 def getBresenhamLine(x1, y1, x2, y2):
     result = []
+
     # https://gist.github.com/bert/1085538
     x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
     dx = np.abs(x2 - x1)
@@ -39,7 +40,16 @@ def getBresenhamLine(x1, y1, x2, y2):
             err += dy; x1 += sx
         if e2 <= dx:
             err += dx; y1 += sy
+
     return result
+
+def getSquarePoints(points, squarePoints):
+    result = []
+    for p in points:
+        if squarePoints[0] <= p[0] <= squarePoints[1] and squarePoints[2] <= p[1] <= squarePoints[3]:
+            result.append(p)
+    return result
+
 
 # Read image as 64bit float gray scale
 image = misc.imread('shepplogan3.png', flatten=True).astype('float64')
@@ -63,7 +73,6 @@ dist = l/n #angle distance between emiters
 sinogramData = np.ndarray(shape=(len(angles), len(emiters)), dtype = np.float32)
 
 for a, angle in enumerate(angles):
-
     for idx, e in enumerate(emiters):
 
         x1, y1 = getCirclePoint(radius, angle + e, cx, cy)
@@ -79,35 +88,51 @@ for a, angle in enumerate(angles):
                 pass
 
         sinogramData[a][idx] = sum
-        #if sum == 0:
-        #    cv2.line(image, (int(x1), int(y1)), (int(x2), int(y2)), (255, 255, 255), 1)
-        #sinogramData[a][idx] = sum
+newImage = np.zeros(shape = image.shape, dtype = np.float32)
+print(image.shape, newImage.shape)
 
-    #print("Done! -> ", angle)
+border = image.shape[0] - 1
+for aa, angle in enumerate(angles):
+    for idx, e in enumerate(emiters):
 
-sinogram = np.zeros(shape=(len(angles), image.shape[0]), dtype=np.float32)
+        x1, y1 = getCirclePoint(radius, angle + e, cx, cy)
+        x2, y2 = getCirclePoint(radius, angle + 180. - e, cx, cy)
 
 
-'''
-off = 0
-if n%2 == 0:
-    off = dist/2
+        if int(x1) != int(x2) and int(y1) != int(y2):
+            a = (y2 - y1) / (x2 - x1)
+            b = y1 - a * x1
 
-i = 0
-while i < n/2:
+            x1, y1 = 0, b
+            x2, y2 = border, a*border + b
 
-    x, y = getCirclePoint(radius, angle + i*dist + off, cx, cy)
-    x2, y2 = getCirclePoint(radius, angle+180 - i*dist - off, cx, cy)
-    cv2.line(image, (int(x), int(y)), (int(x2), int(y2)), (255,255,255), 1)
+            x3, y3 = -b/a, 0
+            x4, y4 = (border - b)/a, border
 
-    x, y = getCirclePoint(radius, angle - i*dist - off, cx, cy)
-    x2, y2 = getCirclePoint(radius, angle+180 + i*dist + off, cx, cy)
-    cv2.line(image, (int(x), int(y)), (int(x2), int(y2)), (255,255,255), 1)
+            points = [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
+            points = getSquarePoints(points, [0, image.shape[0]-1, 0, image.shape[1]-1])
+            x1, y1 = points[0]
+            x2, y2 = points[1]
 
-    i += 1
-'''
-if sinogram.sum() != 0:
-    sinogram /= sinogram.sum()
+        elif int(x1) == int(x2):
+            y1 = 0
+            y2 = image.shape[0] - 1
+        elif int(y1) == int(y2):
+            x1 = 0
+            x2 = image.shape[0] - 1
+
+        pixels = getBresenhamLine(x1, y1, x2, y2)
+
+        for px in pixels:
+            try:
+                newImage[px[0]][px[1]] += sinogramData[aa][idx] / len(pixels)
+            except IndexError:
+                print("INDEX ERROR!")
+                print(px, aa, idx)
+                pass
+
+sinogramData /= sinogramData.sum()
+sinogramData *= 255
 
 '''
 Równanie okręgu:
@@ -123,10 +148,12 @@ theta = np.linspace(0., 180., max(image.shape), endpoint=False)
 correctSinogram = radon(image, theta=theta, circle=True)
 
 # Plot the original and the radon transformed image
-plt.subplot(1, 3, 1), plt.imshow(image, cmap='gray')
+plt.subplot(2, 2, 1), plt.imshow(image, cmap='gray')
 plt.xticks([]), plt.yticks([])
-plt.subplot(1, 3, 2), plt.imshow(ndimage.rotate(sinogramData, -90), cmap='gray')
+plt.subplot(2, 2, 2), plt.imshow(ndimage.rotate(sinogramData, -90), cmap='gray')
 plt.xticks([]), plt.yticks([])
-plt.subplot(1, 3, 3), plt.imshow(correctSinogram, cmap='gray')
+plt.subplot(2, 2, 3), plt.imshow(newImage, cmap='gray')
+plt.xticks([]), plt.yticks([])
+plt.subplot(2, 2, 4), plt.imshow(correctSinogram, cmap='gray')
 plt.xticks([]), plt.yticks([])
 plt.show()
