@@ -1,8 +1,8 @@
 from scipy import misc
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import pyplot
 import math
-import cv2
 from skimage.transform import radon
 from scipy import ndimage
 
@@ -10,7 +10,6 @@ def discrete_radon_transform(image, steps):
     R = np.zeros((steps, len(image)), dtype='float64')
     for s in range(steps):
         rotation = misc.imrotate(image, -s*180/steps).astype('float64')
-        print(sum(rotation))
         R[:,s] = sum(rotation)
     return R
 
@@ -21,7 +20,7 @@ def getCirclePoint(radius, angle, x_origin, y_origin, degrees=True):
     y = y_origin + radius * math.sin(angle)
     return x, y
 
-def getBresenhamLine(x1, y1, x2, y2):
+def getBresenhamLine(x1, y1, x2, y2, max):
     result = []
 
     # https://gist.github.com/bert/1085538
@@ -32,7 +31,8 @@ def getBresenhamLine(x1, y1, x2, y2):
     sy = 1 if y1 < y2 else -1
     err = dx + dy
     while 1:
-        result.append([x1, y1])
+        if max not in [x1, y1]:
+            result.append([x1, y1])
         if x2 == x1 and y2 == y1:
             break
         e2 = 2 * err
@@ -50,9 +50,8 @@ def getSquarePoints(points, squarePoints):
             result.append(p)
     return result
 
-
 # Read image as 64bit float gray scale
-image = misc.imread('shepplogan3.png', flatten=True).astype('float64')
+image = misc.imread('minilogan.png', flatten=True).astype('float64')
 
 print(image.shape)
 
@@ -65,6 +64,7 @@ if image.shape[0] != image.shape[1]:
 
 cx, cy = np.float(image.shape[0]/2), np.float(image.shape[1]/2)
 radius = np.float(image.shape[0]/2)
+square_size = image.shape[0]
 
 angles  = list(np.arange(0., 180., alpha, dtype=np.float32))
 emiters = list(np.linspace(-l/2, l/2, n, dtype=np.float32))
@@ -72,32 +72,28 @@ emiters = list(np.linspace(-l/2, l/2, n, dtype=np.float32))
 dist = l/n #angle distance between emiters
 sinogramData = np.ndarray(shape=(len(angles), len(emiters)), dtype = np.float32)
 
+image = np.array(image, dtype=np.float32)
+
+circlePoints = {}
 for a, angle in enumerate(angles):
     for idx, e in enumerate(emiters):
 
         x1, y1 = getCirclePoint(radius, angle + e, cx, cy)
         x2, y2 = getCirclePoint(radius, angle + 180. - e, cx, cy)
+        circlePoints[(angle, e)] = [x1, y1, x2, y2]
 
-        pixels = getBresenhamLine(x1, y1, x2, y2)
-
-        sum = 0
-        for p, px in enumerate(pixels):
-            try:
-                sum += image[px[0]][px[1]]
-            except IndexError:
-                pass
-
+        pixels = getBresenhamLine(x1, y1, x2, y2, square_size)
+        sum = np.sum(list(map(lambda px: image[px[0]][px[1]], pixels)))
         sinogramData[a][idx] = sum
+
+print("First iter done!")
 newImage = np.zeros(shape = image.shape, dtype = np.float32)
-print(image.shape, newImage.shape)
 
 border = image.shape[0] - 1
 for aa, angle in enumerate(angles):
     for idx, e in enumerate(emiters):
 
-        x1, y1 = getCirclePoint(radius, angle + e, cx, cy)
-        x2, y2 = getCirclePoint(radius, angle + 180. - e, cx, cy)
-
+        x1, y1, x2, y2 = circlePoints[(angle, e)]
 
         if int(x1) != int(x2) and int(y1) != int(y2):
             a = (y2 - y1) / (x2 - x1)
@@ -110,7 +106,7 @@ for aa, angle in enumerate(angles):
             x4, y4 = (border - b)/a, border
 
             points = [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
-            points = getSquarePoints(points, [0, image.shape[0]-1, 0, image.shape[1]-1])
+            points = list(filter(lambda x : 0 <= x[0] <= border and 0 <= x[1] <= border, points))
             x1, y1 = points[0]
             x2, y2 = points[1]
 
@@ -121,28 +117,28 @@ for aa, angle in enumerate(angles):
             x1 = 0
             x2 = image.shape[0] - 1
 
-        pixels = getBresenhamLine(x1, y1, x2, y2)
+        pixels = getBresenhamLine(x1, y1, x2, y2, square_size)
+        if len(pixels) == 0:
+            print("#PRZYPAŁ") #jeden przypadek dzielenia przez zero, lol
+            addValue = 0
+        else:
+            addValue = sinogramData[aa][idx] / len(pixels)
 
-        for px in pixels:
-            try:
-                newImage[px[0]][px[1]] += sinogramData[aa][idx] / len(pixels)
-            except IndexError:
-                print("INDEX ERROR!")
-                print(px, aa, idx)
-                pass
+        newImageFlat = np.reshape(newImage, newshape=-1)
+        newPixels = np.array(list(map(lambda x: x[1] + x[0] * image.shape[0], pixels)), dtype=np.uint16)
+        newImageFlat[newPixels] += addValue
+        newImage = np.reshape(newImageFlat, newshape=image.shape)
 
-sinogramData /= sinogramData.sum()
-sinogramData *= 255
+    ''' TESTING
+    if angle%10 == 0:
+        imgCpy = newImage.copy()
+        imgCpy /= (imgCpy.max())
+        pyplot.imsave("{}.jpg".format(angle), imgCpy)
+    '''
 
-'''
-Równanie okręgu:
-(x-a)**2 + (y-b)**2 = r**2
-x = cx + r * cos(a)
-y = cy + r * sin(a)
-'''
+sinogramData /= sinogramData.sum() * 255
 
 xcenter, ycenter = np.float(image.shape[0]/2), np.float(image.shape[1]/2)
-#cv2.circle(image, (int(cx), int(cy)), int(radius), (255,255,255), 2)
 
 theta = np.linspace(0., 180., max(image.shape), endpoint=False)
 correctSinogram = radon(image, theta=theta, circle=True)
