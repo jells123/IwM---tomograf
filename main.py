@@ -1,7 +1,7 @@
+from scipy.fftpack import fft, ifft, fftfreq
 from scipy import misc
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import pyplot
 import math
 from skimage.transform import radon
 from scipy import ndimage
@@ -88,12 +88,27 @@ for a, angle in enumerate(angles):
 
 print("First iter done!")
 newImage = np.zeros(shape = image.shape, dtype = np.float32)
-
 border = image.shape[0] - 1
+
+closest_two = 2 ** np.ceil(np.log2(2 * sinogramData.shape[0]))
+freqs_count = max(64, int(closest_two)) #nie może być mnie niż 64
+pad_width = ((0, freqs_count - sinogramData.shape[0]), (0, 0))
+sinogram_padded = np.pad(sinogramData, pad_width, mode='constant', constant_values=0)
+
+f = fftfreq(freqs_count).reshape(-1, 1)
+omega = 2 * np.pi * f
+ramp_filter = 2 * np.abs(f)
+
+projection = fft(sinogram_padded, axis=0) * ramp_filter
+filtered_sgram = np.real(ifft(projection, axis=0))
+
+sinogramData = filtered_sgram[:sinogramData.shape[0], :]
+
 for aa, angle in enumerate(angles):
     for idx, e in enumerate(emiters):
 
         x1, y1, x2, y2 = circlePoints[(angle, e)]
+
 
         if int(x1) != int(x2) and int(y1) != int(y2):
             a = (y2 - y1) / (x2 - x1)
@@ -129,14 +144,9 @@ for aa, angle in enumerate(angles):
         newImageFlat[newPixels] += addValue
         newImage = np.reshape(newImageFlat, newshape=image.shape)
 
-    ''' TESTING
-    if angle%10 == 0:
-        imgCpy = newImage.copy()
-        imgCpy /= (imgCpy.max())
-        pyplot.imsave("{}.jpg".format(angle), imgCpy)
-    '''
-
-sinogramData /= sinogramData.sum() * 255
+#sinogramData /= sinogramData.sum()
+#sinogramData *= 255
+sinogramData /= np.max(sinogramData)
 
 xcenter, ycenter = np.float(image.shape[0]/2), np.float(image.shape[1]/2)
 
