@@ -52,7 +52,6 @@ def getSquarePoints(points, squarePoints):
 
 # Read image as 64bit float gray scale
 image = misc.imread('minilogan.png', flatten=True).astype('float64')
-
 print(image.shape)
 
 alpha = 180. / image.shape[0] #obrót tomografu
@@ -71,7 +70,6 @@ emiters = list(np.linspace(-l/2, l/2, n, dtype=np.float32))
 
 dist = l/n #angle distance between emiters
 sinogramData = np.ndarray(shape=(len(angles), len(emiters)), dtype = np.float32)
-
 image = np.array(image, dtype=np.float32)
 
 circlePoints = {}
@@ -90,6 +88,7 @@ print("First iter done!")
 newImage = np.zeros(shape = image.shape, dtype = np.float32)
 border = image.shape[0] - 1
 
+'''
 closest_two = 2 ** np.ceil(np.log2(2 * sinogramData.shape[0]))
 freqs_count = max(64, int(closest_two)) #nie może być mnie niż 64
 pad_width = ((0, freqs_count - sinogramData.shape[0]), (0, 0))
@@ -103,13 +102,12 @@ projection = fft(sinogram_padded, axis=0) * ramp_filter
 filtered_sgram = np.real(ifft(projection, axis=0))
 
 sinogramData = filtered_sgram[:sinogramData.shape[0], :]
+'''
 
 for aa, angle in enumerate(angles):
     for idx, e in enumerate(emiters):
 
         x1, y1, x2, y2 = circlePoints[(angle, e)]
-
-
         if int(x1) != int(x2) and int(y1) != int(y2):
             a = (y2 - y1) / (x2 - x1)
             b = y1 - a * x1
@@ -140,7 +138,7 @@ for aa, angle in enumerate(angles):
             addValue = sinogramData[aa][idx] / len(pixels)
 
         newImageFlat = np.reshape(newImage, newshape=-1)
-        newPixels = np.array(list(map(lambda x: x[1] + x[0] * image.shape[0], pixels)), dtype=np.uint16)
+        newPixels = np.array(list(map(lambda x: x[1] + x[0] * image.shape[0], pixels)), dtype=np.uint32)
         newImageFlat[newPixels] += addValue
         newImage = np.reshape(newImageFlat, newshape=image.shape)
 
