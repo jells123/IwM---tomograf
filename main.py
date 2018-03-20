@@ -1,10 +1,12 @@
-from scipy.fftpack import fft, ifft, fftfreq
+from scipy.fftpack import fft, ifft, fftfreq, rfftfreq, rfft, irfft
 from scipy import misc
 import numpy as np
 import matplotlib.pyplot as plt
 import math
 from skimage.transform import radon
 from scipy import ndimage
+import cv2
+
 
 def discrete_radon_transform(image, steps):
     R = np.zeros((steps, len(image)), dtype='float64')
@@ -72,6 +74,7 @@ dist = l/n #angle distance between emiters
 sinogramData = np.ndarray(shape=(len(angles), len(emiters)), dtype = np.float32)
 image = np.array(image, dtype=np.float32)
 
+width_1d = len(sinogramData[0])
 circlePoints = {}
 for a, angle in enumerate(angles):
     for idx, e in enumerate(emiters):
@@ -83,6 +86,15 @@ for a, angle in enumerate(angles):
         pixels = getBresenhamLine(x1, y1, x2, y2, square_size)
         sum = np.sum(list(map(lambda px: image[px[0]][px[1]], pixels)))
         sinogramData[a][idx] = sum
+
+    get_row = np.array(sinogramData[a], dtype=np.float32)
+    f = rfftfreq(width_1d)
+    ramp_filter = np.abs(f) * 2
+    projection = rfft(get_row, axis=0) * ramp_filter
+    get_row = np.real(irfft(projection, axis=0))
+
+    for i in range(len(get_row)):
+        sinogramData[a][i] = get_row[i]
 
 print("First iter done!")
 newImage = np.zeros(shape = image.shape, dtype = np.float32)
@@ -142,10 +154,11 @@ for aa, angle in enumerate(angles):
         newImageFlat[newPixels] += addValue
         newImage = np.reshape(newImageFlat, newshape=image.shape)
 
-#sinogramData /= sinogramData.sum()
-#sinogramData *= 255
-sinogramData /= np.max(sinogramData)
 
+# sinogramData /= sinogramData.sum()
+# sinogramData *= 255
+# sinogramData /= np.max(sinogramData)
+print(newImage[5][5])
 xcenter, ycenter = np.float(image.shape[0]/2), np.float(image.shape[1]/2)
 
 theta = np.linspace(0., 180., max(image.shape), endpoint=False)
