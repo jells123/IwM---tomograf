@@ -22,6 +22,9 @@ class Example(QWidget):
         self.name = QLabel("")
         self.pic = QLabel(self)
         self.file = ""
+        self.totalA = {}
+        self.totalN = {}
+        self.totalL = {}
         self.btn2 = QPushButton('Do Tomography', self)
         self.spin1 = QDoubleSpinBox(self)
         self.spin2 = QSpinBox(self)
@@ -70,6 +73,13 @@ class Example(QWidget):
         self.spin3.setSingleStep(0.1)
         self.spin3.setMaximum(180.0)
 
+        b = QPushButton('Statistics(alpha)', self)
+        b.clicked.connect(self.funAlpha)
+        b1 = QPushButton('Statistics(n)', self)
+        b1.clicked.connect(self.funN)
+        b2 = QPushButton('Statistics(l)', self)
+        b2.clicked.connect(self.funL)
+
         grid = QGridLayout()
         grid.setSpacing(10)
 
@@ -85,6 +95,9 @@ class Example(QWidget):
         grid.addWidget(self.spin1, 8, 0, 1, 1)
         grid.addWidget(self.spin2, 8, 1, 1, 1)
         grid.addWidget(self.spin3, 8, 2, 1, 1)
+        grid.addWidget(b, 9, 0, 1, 1)
+        grid.addWidget(b1, 9, 1, 1, 1)
+        grid.addWidget(b2, 9, 2, 1, 1)
 
         #self.waiter.hide()
         self.setLayout(grid)
@@ -97,6 +110,8 @@ class Example(QWidget):
         filter = "Png File (*.png)"
         fileIn = QFileDialog.getOpenFileName(self, "Select Png File", "./example", filter)
         self.file = str(fileIn).split("'")[1]
+        if self.file == '':
+            return
         self.name.setText(self.file.split("/")[-1])
         self.name.show()
         self.btn2.setEnabled(True)
@@ -112,18 +127,40 @@ class Example(QWidget):
     def tomograph(self):
         self.waiter.show()
         self.update()
-        doTomography(self.file, float(self.spin1.text().replace(',', '.')), int(self.spin2.text()),
-                     float(self.spin3.text().replace(',', '.')))
+        y = doTomography(self.file, float(self.spin1.text().replace(',', '.')), int(self.spin2.text()), float(self.spin3.text().replace(',', '.')))
         self.pic.setPixmap(QPixmap(os.getcwd() + "/result.png").scaledToHeight(500))
         self.pic.show()
         self.waiter.hide()
-        self.update()
+        self.totalA[float(self.spin1.text().replace(',', '.'))] = y
+        self.totalN[int(self.spin2.text())] = y
+        self.totalL[float(self.spin3.text().replace(',', '.'))] = y
+        # self.update()
 
     def center(self):
         qr = self.frameGeometry()
         cp = QDesktopWidget().availableGeometry().center()
         qr.moveCenter(cp)
         self.move(qr.topLeft())
+
+    @pyqtSlot()
+    def funAlpha(self):
+        tmp = sorted(self.totalA)
+        print(tmp)
+        plt.figure()
+        plt.plot(list(self.tmp.keys()), list(self.tmp.vaqlues()))
+        plt.show()
+
+    @pyqtSlot()
+    def funN(self):
+        plt.figure()
+        plt.plot(list(self.totalN.keys()), list(self.totalN.values()))
+        plt.show()
+
+    @pyqtSlot()
+    def funL(self):
+        plt.figure()
+        plt.plot(list(self.totalL.keys()), list(self.totalL.values()))
+        plt.show()
 
 
 def discrete_radon_transform(image, steps):
@@ -181,13 +218,24 @@ def start(file):
     return math.floor((180. / image.shape[0])*1000)/1000, image.shape[0], 180.
 
 
-def statistics(image, newImage):
+def RMSE(image, newImage):
     deviation = 0
     for i, row in enumerate(image):
         for j, elem in enumerate(row):
             deviation += abs(newImage[i][j] - elem)**2
-    RMSE = math.sqrt(deviation / image.shape[0]**2)
-    print('RMSE: ' + RMSE)
+
+    if image.shape[0]**2 != 0:
+        RMSE = math.sqrt(deviation / (image.shape[0]**2))
+        # print('RMSE: ' + str(RMSE))
+        return RMSE
+    else:
+        return -1
+
+
+def plotTotal(totalX, totalY):
+    plt.figure()
+    plt.plot(totalX, totalY)
+    plt.show()
 
 
 def doTomography(file, alpha, n, l):
@@ -245,6 +293,8 @@ def doTomography(file, alpha, n, l):
     sinogramData = filtered_sgram[:sinogramData.shape[0], :]
     # sinogramData = scipy.ndimage.gaussian_filter(sinogramData, sigma=3)
 
+    x, y = [], []
+
     for aa, angle in enumerate(angles):
         for idx, e in enumerate(emiters):
 
@@ -284,9 +334,13 @@ def doTomography(file, alpha, n, l):
             newImageFlat[newPixels] += addValue
             newImage = np.reshape(newImageFlat, newshape=image.shape)
 
-    # sinogramData /= sinogramData.sum()
-    # sinogramData *= 255
-    # sinogramData /= np.max(sinogramData)
+        x.append(aa)
+        y.append(RMSE(image, newImage))
+
+    plt.figure()
+    plt.plot(x, y)
+    plt.show()
+    plt.figure()
 
     xcenter, ycenter = np.float(image.shape[0] / 2), np.float(image.shape[1] / 2)
 
@@ -304,6 +358,10 @@ def doTomography(file, alpha, n, l):
     plt.xticks([]), plt.yticks([])
     # plt.show()
     plt.savefig("result.png")
+
+    return y[-1]
+
+    # print(RMSE(image, newImage))
 
 
 if __name__ == '__main__':
