@@ -11,7 +11,7 @@ from PyQt5.QtCore import *
 import sys
 import os
 import scipy
-
+import cv2
 
 class Example(QWidget):
 
@@ -76,7 +76,7 @@ class Example(QWidget):
         grid.addWidget(title, 1, 0, 1, 1)
         grid.addWidget(btn, 1, 1, 1, 1)
         grid.addWidget(self.btn2, 2, 1, 1, 1)
-        grid.addWidget(self.waiter, 2, 1, 1, 1)
+        grid.addWidget(self.waiter, 2, 2, 1, 1)
         grid.addWidget(self.name, 1, 2, 1, 1)
         grid.addWidget(self.pic, 3, 0, 3, 3)
         grid.addWidget(alpha_text, 7, 0, 1, 1)
@@ -86,7 +86,7 @@ class Example(QWidget):
         grid.addWidget(self.spin2, 8, 1, 1, 1)
         grid.addWidget(self.spin3, 8, 2, 1, 1)
 
-        self.waiter.hide()
+        #self.waiter.hide()
         self.setLayout(grid)
 
         self.center()
@@ -111,8 +111,6 @@ class Example(QWidget):
     @pyqtSlot()
     def tomograph(self):
         self.waiter.show()
-        print(self.waiter.isVisible())  # nie dziala, lol...
-        print(self.waiter.text())
         self.update()
         doTomography(self.file, float(self.spin1.text().replace(',', '.')), int(self.spin2.text()),
                      float(self.spin3.text().replace(',', '.')))
@@ -245,7 +243,6 @@ def doTomography(file, alpha, n, l):
     filtered_sgram = np.real(ifft(projection, axis=0))
 
     sinogramData = filtered_sgram[:sinogramData.shape[0], :]
-
     # sinogramData = scipy.ndimage.gaussian_filter(sinogramData, sigma=3)
 
     for aa, angle in enumerate(angles):
@@ -289,7 +286,7 @@ def doTomography(file, alpha, n, l):
 
     # sinogramData /= sinogramData.sum()
     # sinogramData *= 255
-    sinogramData /= np.max(sinogramData)
+    # sinogramData /= np.max(sinogramData)
 
     xcenter, ycenter = np.float(image.shape[0] / 2), np.float(image.shape[1] / 2)
 
