@@ -1,17 +1,17 @@
-from scipy.fftpack import fft, ifft, fftfreq
-from scipy import misc
-import numpy as np
-import matplotlib.pyplot as plt
 import math
-from skimage.transform import radon
-from scipy import ndimage
-from PyQt5.QtWidgets import *
-from PyQt5.QtGui import *
-from PyQt5.QtCore import *
-import sys
+import operator
 import os
-import scipy
-import cv2
+import sys
+
+import matplotlib.pyplot as plt
+import numpy as np
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+from scipy import misc
+from scipy import ndimage
+from skimage.transform import radon
+
 
 class Example(QWidget):
 
@@ -99,7 +99,7 @@ class Example(QWidget):
         grid.addWidget(b1, 9, 1, 1, 1)
         grid.addWidget(b2, 9, 2, 1, 1)
 
-        #self.waiter.hide()
+        self.waiter.hide()
         self.setLayout(grid)
 
         self.center()
@@ -126,8 +126,15 @@ class Example(QWidget):
     @pyqtSlot()
     def tomograph(self):
         self.waiter.show()
-        self.update()
-        y = doTomography(self.file, float(self.spin1.text().replace(',', '.')), int(self.spin2.text()), float(self.spin3.text().replace(',', '.')))
+        print(self.waiter.isVisible())  # nie dziala, lol...
+        print(self.waiter.text())
+        # self.update()
+        n = int(self.spin2.text())
+        if n % 2 == 0:
+            n += 1  # hehe programowanie
+
+        y = doTomography(self.file, float(self.spin1.text().replace(',', '.')), n,
+                     float(self.spin3.text().replace(',', '.')))
         self.pic.setPixmap(QPixmap(os.getcwd() + "/result.png").scaledToHeight(500))
         self.pic.show()
         self.waiter.hide()
@@ -144,22 +151,26 @@ class Example(QWidget):
 
     @pyqtSlot()
     def funAlpha(self):
-        tmp = sorted(self.totalA)
-        print(tmp)
+        tmp = sorted(self.totalA.items(), key=operator.itemgetter(0))
+        tmp = np.asarray(tmp, dtype=np.float32)
         plt.figure()
-        plt.plot(list(self.tmp.keys()), list(self.tmp.vaqlues()))
+        plt.plot(tmp[:, 0], tmp[:, 1])
         plt.show()
 
     @pyqtSlot()
     def funN(self):
+        tmp = sorted(self.totalA.items(), key=operator.itemgetter(0))
+        tmp = np.asarray(tmp, dtype=np.float32)
         plt.figure()
-        plt.plot(list(self.totalN.keys()), list(self.totalN.values()))
+        plt.plot(tmp[:, 0], tmp[:, 1])
         plt.show()
 
     @pyqtSlot()
     def funL(self):
+        tmp = sorted(self.totalA.items(), key=operator.itemgetter(0))
+        tmp = np.asarray(tmp, dtype=np.float32)
         plt.figure()
-        plt.plot(list(self.totalL.keys()), list(self.totalL.values()))
+        plt.plot(tmp[:, 0], tmp[:, 1])
         plt.show()
 
 
@@ -215,7 +226,7 @@ def getSquarePoints(points, squarePoints):
 
 def start(file):
     image = misc.imread(file, flatten=True).astype('float64')
-    return math.floor((180. / image.shape[0])*1000)/1000, image.shape[0], 180.
+    return math.floor((180. / image.shape[0])*1000)/1000, 777, 90.
 
 
 def RMSE(image, newImage):
@@ -238,17 +249,39 @@ def plotTotal(totalX, totalY):
     plt.show()
 
 
+def kernel(x):
+    if x == 0:
+        return 1
+    elif x % 2 == 0:
+        return 0
+    else:
+        return (-4/math.pi**2)/x**2
+
+
+def getFilterKernel(len):
+    if len % 2 != 1:
+        print("Podano parzystą wielkość [kernel]")
+        return
+    kernel = np.zeros(len, dtype=np.float32)
+    mid = int(len/2)
+    kernel[mid] = 1
+    for i in range(1, len-mid):
+        if i % 2 == 0:
+            kernel[mid+i] = 0
+            kernel[mid-i] = 0
+        elif i % 2 != 0:
+            kernel[mid+i] = (-4/(np.pi**2)) / i**2
+            kernel[mid-i] = (-4/(np.pi**2)) / i**2
+    return kernel
+
+
 def doTomography(file, alpha, n, l):
     # Read image as 64bit float gray scale
     image = misc.imread(file, flatten=True).astype('float64')
-    if image.shape[0] != image.shape[1]:
-        print("Error! Image is not square.")
-
     print(image.shape)
 
-    # alpha = 180. / image.shape[0]  # obrót tomografu
-    # n = image.shape[0]  # number of emiters
-    # l = 180.  # rozpiętość kątowa (?)
+    if image.shape[0] != image.shape[1]:
+        print("Error! Image is not square.")
 
     cx, cy = np.float(image.shape[0] / 2), np.float(image.shape[1] / 2)
     radius = np.float(image.shape[0] / 2)
@@ -259,12 +292,11 @@ def doTomography(file, alpha, n, l):
 
     dist = l / n  # angle distance between emiters
     sinogramData = np.ndarray(shape=(len(angles), len(emiters)), dtype=np.float32)
-
     image = np.array(image, dtype=np.float32)
 
+    width_1d = len(sinogramData[0])
     circlePoints = {}
-    newImage = np.zeros(shape=image.shape, dtype=np.float32)
-    border = image.shape[0] - 1
+    kernel = getFilterKernel(width_1d)
 
     for a, angle in enumerate(angles):
         for idx, e in enumerate(emiters):
@@ -276,22 +308,13 @@ def doTomography(file, alpha, n, l):
             sum = np.sum(list(map(lambda px: image[px[0]][px[1]], pixels)))
             sinogramData[a][idx] = sum
 
+        get_row = np.array(sinogramData[a], dtype=np.float32)
+        row_filtered = np.convolve(get_row, kernel, mode='same')
+        sinogramData[a, :] = row_filtered
+
     print("First iter done!")
-
-    closest_two = 2 ** np.ceil(np.log2(2 * sinogramData.shape[0]))
-    freqs_count = max(64, int(closest_two))  # nie może być mnie niż 64
-    pad_width = ((0, freqs_count - sinogramData.shape[0]), (0, 0))
-    sinogram_padded = np.pad(sinogramData, pad_width, mode='constant', constant_values=0)
-
-    f = fftfreq(freqs_count).reshape(-1, 1)
-    omega = 2 * np.pi * f
-    ramp_filter = 2 * np.abs(f)
-
-    projection = fft(sinogram_padded, axis=0) * ramp_filter
-    filtered_sgram = np.real(ifft(projection, axis=0))
-
-    sinogramData = filtered_sgram[:sinogramData.shape[0], :]
-    # sinogramData = scipy.ndimage.gaussian_filter(sinogramData, sigma=3)
+    newImage = np.zeros(shape=image.shape, dtype=np.float32)
+    border = image.shape[0] - 1
 
     x, y = [], []
 
@@ -299,7 +322,6 @@ def doTomography(file, alpha, n, l):
         for idx, e in enumerate(emiters):
 
             x1, y1, x2, y2 = circlePoints[(angle, e)]
-
             if int(x1) != int(x2) and int(y1) != int(y2):
                 a = (y2 - y1) / (x2 - x1)
                 b = y1 - a * x1
@@ -314,7 +336,6 @@ def doTomography(file, alpha, n, l):
                 points = list(filter(lambda x: 0 <= x[0] <= border and 0 <= x[1] <= border, points))
                 x1, y1 = points[0]
                 x2, y2 = points[1]
-
             elif int(x1) == int(x2):
                 y1 = 0
                 y2 = image.shape[0] - 1
@@ -327,12 +348,11 @@ def doTomography(file, alpha, n, l):
                 print("#PRZYPAŁ")  # jeden przypadek dzielenia przez zero, lol
                 addValue = 0
             else:
-                addValue = sinogramData[aa][idx] / len(pixels)
-
-            newImageFlat = np.reshape(newImage, newshape=-1)
-            newPixels = np.array(list(map(lambda x: x[1] + x[0] * image.shape[0], pixels)), dtype=np.uint32)
-            newImageFlat[newPixels] += addValue
-            newImage = np.reshape(newImageFlat, newshape=image.shape)
+                addValue = sinogramData[aa][idx] / (len(pixels))
+                newImageFlat = np.reshape(newImage, newshape=-1)
+                newPixels = np.array(list(map(lambda x: x[1] + x[0] * image.shape[0], pixels)), dtype=np.uint32)
+                newImageFlat[newPixels] += addValue
+                newImage = np.reshape(newImageFlat, newshape=image.shape)
 
         x.append(aa)
         y.append(RMSE(image, newImage))
@@ -340,10 +360,10 @@ def doTomography(file, alpha, n, l):
     plt.figure()
     plt.plot(x, y)
     plt.show()
+
     plt.figure()
 
     xcenter, ycenter = np.float(image.shape[0] / 2), np.float(image.shape[1] / 2)
-
     theta = np.linspace(0., 180., max(image.shape), endpoint=False)
     correctSinogram = radon(image, theta=theta, circle=True)
 
@@ -357,6 +377,7 @@ def doTomography(file, alpha, n, l):
     plt.subplot(2, 2, 4), plt.imshow(correctSinogram, cmap='gray')
     plt.xticks([]), plt.yticks([])
     # plt.show()
+
     plt.savefig("result.png")
 
     return y[-1]
