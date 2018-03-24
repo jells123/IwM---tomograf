@@ -226,7 +226,7 @@ def getSquarePoints(points, squarePoints):
 
 def start(file):
     image = misc.imread(file, flatten=True).astype('float64')
-    return math.floor((180. / image.shape[0])*1000)/1000, 777, 90.
+    return math.floor((180. / image.shape[0])*1000)/1000, image.shape[0], 100.
 
 
 def RMSE(image, newImage):
@@ -380,9 +380,8 @@ def doTomography(file, alpha, n, l):
 
     plt.savefig("result.png")
 
+    print(y[-1])
     return y[-1]
-
-    # print(RMSE(image, newImage))
 
 
 if __name__ == '__main__':
