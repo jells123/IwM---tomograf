@@ -159,7 +159,7 @@ class Example(QWidget):
 
     @pyqtSlot()
     def funN(self):
-        tmp = sorted(self.totalA.items(), key=operator.itemgetter(0))
+        tmp = sorted(self.totalN.items(), key=operator.itemgetter(0))
         tmp = np.asarray(tmp, dtype=np.float32)
         plt.figure()
         plt.plot(tmp[:, 0], tmp[:, 1])
@@ -167,7 +167,7 @@ class Example(QWidget):
 
     @pyqtSlot()
     def funL(self):
-        tmp = sorted(self.totalA.items(), key=operator.itemgetter(0))
+        tmp = sorted(self.totalL.items(), key=operator.itemgetter(0))
         tmp = np.asarray(tmp, dtype=np.float32)
         plt.figure()
         plt.plot(tmp[:, 0], tmp[:, 1])
