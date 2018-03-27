@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import *
 from scipy import misc
 from scipy import ndimage
 from skimage.transform import radon
+from sklearn.metrics import mean_squared_error
 
 
 class Example(QWidget):
@@ -29,6 +30,9 @@ class Example(QWidget):
         self.spin1 = QDoubleSpinBox(self)
         self.spin2 = QSpinBox(self)
         self.spin3 = QDoubleSpinBox(self)
+        self.b = QPushButton('Statistics(alpha)', self)
+        self.b1 = QPushButton('Statistics(n)', self)
+        self.b2 = QPushButton('Statistics(l)', self)
 
         self.initUI()
 
@@ -73,12 +77,12 @@ class Example(QWidget):
         self.spin3.setSingleStep(0.1)
         self.spin3.setMaximum(180.0)
 
-        b = QPushButton('Statistics(alpha)', self)
-        b.clicked.connect(self.funAlpha)
-        b1 = QPushButton('Statistics(n)', self)
-        b1.clicked.connect(self.funN)
-        b2 = QPushButton('Statistics(l)', self)
-        b2.clicked.connect(self.funL)
+        self.b.clicked.connect(self.funAlpha)
+        self.b.setEnabled(False)
+        self.b1.clicked.connect(self.funN)
+        self.b1.setEnabled(False)
+        self.b2.clicked.connect(self.funL)
+        self.b2.setEnabled(False)
 
         grid = QGridLayout()
         grid.setSpacing(10)
@@ -95,9 +99,9 @@ class Example(QWidget):
         grid.addWidget(self.spin1, 8, 0, 1, 1)
         grid.addWidget(self.spin2, 8, 1, 1, 1)
         grid.addWidget(self.spin3, 8, 2, 1, 1)
-        grid.addWidget(b, 9, 0, 1, 1)
-        grid.addWidget(b1, 9, 1, 1, 1)
-        grid.addWidget(b2, 9, 2, 1, 1)
+        grid.addWidget(self.b, 9, 0, 1, 1)
+        grid.addWidget(self.b1, 9, 1, 1, 1)
+        grid.addWidget(self.b2, 9, 2, 1, 1)
 
         self.waiter.hide()
         self.setLayout(grid)
@@ -142,6 +146,9 @@ class Example(QWidget):
         self.totalN[int(self.spin2.text())] = y
         self.totalL[float(self.spin3.text().replace(',', '.'))] = y
         # self.update()
+        self.b.setEnabled(True)
+        self.b1.setEnabled(True)
+        self.b2.setEnabled(True)
 
     def center(self):
         qr = self.frameGeometry()
@@ -230,17 +237,36 @@ def start(file):
 
 
 def RMSE(image, newImage):
-    deviation = 0
-    for i, row in enumerate(image):
-        for j, elem in enumerate(row):
-            deviation += abs(newImage[i][j] - elem)**2
+    return np.sqrt(mean_squared_error(image, newImage))
 
-    if image.shape[0]**2 != 0:
-        RMSE = math.sqrt(deviation / (image.shape[0]**2))
-        # print('RMSE: ' + str(RMSE))
-        return RMSE
-    else:
-        return -1
+
+def normalize(img, originalMax):
+    for i in range(len(img)):
+        for j in range(len(img[i])):
+            img[i, j] = img[i, j] / originalMax * 255
+
+    return img
+
+
+def normalize2(img):
+    max_val = np.max(img)
+    min_val = np.min(img)
+
+    for i in range(len(img)):
+        for j in range(len(img)):
+            img[i, j] = (img[i, j] - min_val) / max_val * 255
+
+    return img
+
+
+def cutDownValues(img, cutDownValue=35):
+    for i in range(len(img)):
+        for j in range(len(img[i])):
+            if img[i, j] > cutDownValue:
+                img[i, j] = img[i, j] - cutDownValue
+            else:
+                img[i, j] = 0
+    return img
 
 
 def plotTotal(totalX, totalY):
@@ -363,6 +389,11 @@ def doTomography(file, alpha, n, l):
 
     plt.figure()
 
+    newImage = ndimage.gaussian_filter(newImage, sigma=0.5)
+    # newImage = normalize(newImage, np.max(image))
+    newImage = normalize2(newImage)
+    newImage = cutDownValues(newImage)
+
     xcenter, ycenter = np.float(image.shape[0] / 2), np.float(image.shape[1] / 2)
     theta = np.linspace(0., 180., max(image.shape), endpoint=False)
     correctSinogram = radon(image, theta=theta, circle=True)
@@ -380,7 +411,7 @@ def doTomography(file, alpha, n, l):
 
     plt.savefig("result.png")
 
-    print(y[-1])
+    print('Finally: ' + str(RMSE(image, newImage)))
     return y[-1]
 
 
