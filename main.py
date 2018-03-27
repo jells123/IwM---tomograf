@@ -7,6 +7,19 @@ from skimage.transform import radon
 from scipy import ndimage
 import cv2
 
+def RMSE(image, newImage):
+    deviation = 0
+    for i, row in enumerate(image):
+        for j, elem in enumerate(row):
+            deviation += abs(newImage[i][j] - elem)**2
+
+    if image.shape[0]**2 != 0:
+        RMSE = math.sqrt(deviation / (image.shape[0]**2))
+        # print('RMSE: ' + str(RMSE))
+        return RMSE
+    else:
+        return -1
+
 def getFilterKernel(len):
     if len % 2 != 1:
         print("Podano parzystą wielkość [kernel]")
@@ -69,16 +82,16 @@ def getSquarePoints(points, squarePoints):
     return result
 
 # Read image as 64bit float gray scale
-image = misc.imread('smallerlogan.png', flatten=True).astype('float64')
+image = misc.imread('minimini.png', flatten=True).astype('float64')
 print(image.shape)
 
 alpha = 180. / image.shape[0] #obrót tomografu
+#alpha = 0.2 # 1.0 -> 49.44
 n = image.shape[0] #number of emiters
 if n % 2 == 0:
     n += 1 #hehe programowanie
 
 l = 90. #rozpiętość kątowa (?)
-n = 777
 
 if image.shape[0] != image.shape[1]:
     print("Error! Image is not square.")
@@ -87,7 +100,7 @@ cx, cy = np.float(image.shape[0]/2), np.float(image.shape[1]/2)
 radius = np.float(image.shape[0]/2)
 square_size = image.shape[0]
 
-angles  = list(np.arange(0., 180., alpha, dtype=np.float32))
+angles  = list(np.arange(0., 360., alpha, dtype=np.float32))
 emiters = list(np.linspace(-l/2, l/2, n, dtype=np.float32))
 
 dist = l/n #angle distance between emiters
@@ -112,34 +125,10 @@ for a, angle in enumerate(angles):
     get_row = np.array(sinogramData[a], dtype=np.float32)
     row_filtered = np.convolve(get_row, kernel, mode='same')
     sinogramData[a, :] = row_filtered
-    '''
-    f = rfftfreq(width_1d)
-    ramp_filter = np.abs(f) * 2
-    projection = rfft(get_row, axis=0) * ramp_filter
-    get_row = np.real(irfft(projection, axis=0))
-
-    for i in range(len(get_row)):
-        sinogramData[a][i] = get_row[i]'''
 
 print("First iter done!")
 newImage = np.zeros(shape = image.shape, dtype = np.float32)
 border = image.shape[0] - 1
-
-'''
-closest_two = 2 ** np.ceil(np.log2(2 * sinogramData.shape[0]))
-freqs_count = max(64, int(closest_two)) #nie może być mnie niż 64
-pad_width = ((0, freqs_count - sinogramData.shape[0]), (0, 0))
-sinogram_padded = np.pad(sinogramData, pad_width, mode='constant', constant_values=0)
-
-f = fftfreq(freqs_count).reshape(-1, 1)
-omega = 2 * np.pi * f
-ramp_filter = 2 * np.abs(f)
-
-projection = fft(sinogram_padded, axis=0) * ramp_filter
-filtered_sgram = np.real(ifft(projection, axis=0))
-
-sinogramData = filtered_sgram[:sinogramData.shape[0], :]
-'''
 
 for aa, angle in enumerate(angles):
     for idx, e in enumerate(emiters):
@@ -168,7 +157,6 @@ for aa, angle in enumerate(angles):
 
         pixels = getBresenhamLine(x1, y1, x2, y2, square_size)
         if len(pixels) == 0:
-            print("#PRZYPAŁ") #jeden przypadek dzielenia przez zero, lol
             addValue = 0
         else:
             addValue = sinogramData[aa][idx] / (len(pixels))
@@ -177,10 +165,15 @@ for aa, angle in enumerate(angles):
             newImageFlat[newPixels] += addValue
             newImage = np.reshape(newImageFlat, newshape=image.shape)
 
-
 xcenter, ycenter = np.float(image.shape[0]/2), np.float(image.shape[1]/2)
-theta = np.linspace(0., 180., max(image.shape), endpoint=False)
-correctSinogram = radon(image, theta=theta, circle=True)
+newImage += np.abs(np.min(newImage))
+newImage /= np.max(newImage)
+
+dst = np.zeros(shape=newImage.shape, dtype=np.uint8)
+newImage *= 255
+newImg_uint = np.uint8(newImage)
+print(alpha + " " + RMSE(image, newImage))
+# cv2.fastNlMeansDenoising(newImg_uint, dst, h=5, searchWindowSize=21, templateWindowSize=7)
 
 # Plot the original and the radon transformed image
 plt.subplot(2, 2, 1), plt.imshow(image, cmap='gray')
@@ -189,6 +182,6 @@ plt.subplot(2, 2, 2), plt.imshow(ndimage.rotate(sinogramData, -90), cmap='gray')
 plt.xticks([]), plt.yticks([])
 plt.subplot(2, 2, 3), plt.imshow(newImage, cmap='gray')
 plt.xticks([]), plt.yticks([])
-plt.subplot(2, 2, 4), plt.imshow(correctSinogram, cmap='gray')
+plt.subplot(2, 2, 4), plt.imshow(dst, cmap='gray')
 plt.xticks([]), plt.yticks([])
 plt.show()
