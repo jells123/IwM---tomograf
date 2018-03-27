@@ -251,11 +251,14 @@ def normalize(img, originalMax):
 def normalize2(img):
     max_val = np.max(img)
     min_val = np.min(img)
+    print(min_val, max_val)
 
+    max_val += np.abs(min_val)
     for i in range(len(img)):
         for j in range(len(img)):
-            img[i, j] = (img[i, j] - min_val) / max_val * 255
+            img[i, j] = (img[i, j] + np.abs(min_val)) / max_val
 
+    print(np.min(img), np.max(img))
     return img
 
 
@@ -383,32 +386,33 @@ def doTomography(file, alpha, n, l):
         x.append(aa)
         y.append(RMSE(image, newImage))
 
+    plt.gcf().clear()
+    plt.close()
+
     plt.figure()
     plt.plot(x, y)
     plt.show()
 
     plt.figure()
 
-    newImage = ndimage.gaussian_filter(newImage, sigma=0.5)
-    # newImage = normalize(newImage, np.max(image))
-    newImage = normalize2(newImage)
-    newImage = cutDownValues(newImage)
+    newImageRaw = newImage.copy()
 
-    xcenter, ycenter = np.float(image.shape[0] / 2), np.float(image.shape[1] / 2)
-    theta = np.linspace(0., 180., max(image.shape), endpoint=False)
-    correctSinogram = radon(image, theta=theta, circle=True)
+    newImage = normalize2(newImage) * 255
+    newImage = ndimage.gaussian_filter(newImage, sigma=0.5)
+    #newImage = normalize(newImage, np.max(image))
+    newImage = cutDownValues(newImage, cutDownValue=np.percentile(newImage, q=60))
+
 
     # Plot the original and the radon transformed image
     plt.subplot(2, 2, 1), plt.imshow(image, cmap='gray')
     plt.xticks([]), plt.yticks([])
     plt.subplot(2, 2, 2), plt.imshow(ndimage.rotate(sinogramData, -90), cmap='gray')
     plt.xticks([]), plt.yticks([])
-    plt.subplot(2, 2, 3), plt.imshow(newImage, cmap='gray')
+    plt.subplot(2, 2, 3), plt.imshow(newImageRaw, cmap='gray')
     plt.xticks([]), plt.yticks([])
-    plt.subplot(2, 2, 4), plt.imshow(correctSinogram, cmap='gray')
+    plt.subplot(2, 2, 4), plt.imshow(newImage, cmap='gray')
     plt.xticks([]), plt.yticks([])
     # plt.show()
-
     plt.savefig("result.png")
 
     print('Finally: ' + str(RMSE(image, newImage)))
