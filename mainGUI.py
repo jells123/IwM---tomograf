@@ -13,6 +13,12 @@ from scipy import ndimage
 from skimage.transform import radon
 from sklearn.metrics import mean_squared_error
 
+'''
+!!!
+Zliczać ile linii przeszło przez dany piksel.
+Uśrednić wynik w danym pikselu przez liczbę linii, które przez niego przeszły
+- jakie to daje rezultaty?
+'''
 
 class Example(QWidget):
 
@@ -33,6 +39,9 @@ class Example(QWidget):
         self.b = QPushButton('Statistics(alpha)', self)
         self.b1 = QPushButton('Statistics(n)', self)
         self.b2 = QPushButton('Statistics(l)', self)
+
+        self.doCountLines = False
+        self.czekBoks = QCheckBox("Normalize by lines count")
 
         self.initUI()
 
@@ -65,7 +74,7 @@ class Example(QWidget):
         l_text = QLabel('Adjust l:')
         l_text.setAlignment(Qt.AlignCenter)
 
-        self.spin1.setMinimum(0.001)
+        self.spin1.setMinimum(0.5)
         self.spin1.setDecimals(3)
         self.spin1.setSingleStep(0.001)
 
@@ -87,6 +96,9 @@ class Example(QWidget):
         grid = QGridLayout()
         grid.setSpacing(10)
 
+        self.czekBoks.setChecked(False)
+        self.czekBoks.stateChanged.connect(lambda: self.btnstate(self.czekBoks))
+
         grid.addWidget(title, 1, 0, 1, 1)
         grid.addWidget(btn, 1, 1, 1, 1)
         grid.addWidget(self.btn2, 2, 1, 1, 1)
@@ -102,12 +114,19 @@ class Example(QWidget):
         grid.addWidget(self.b, 9, 0, 1, 1)
         grid.addWidget(self.b1, 9, 1, 1, 1)
         grid.addWidget(self.b2, 9, 2, 1, 1)
+        grid.addWidget(self.czekBoks, 10, 0, 1, 3)
 
         self.waiter.hide()
         self.setLayout(grid)
 
         self.center()
         self.show()
+
+    def btnstate(self, b):
+        if b.isChecked() == True:
+            self.doCountLines = True
+        else:
+            self.doCountLines = False
 
     @pyqtSlot()
     def browseFiles(self):
@@ -138,7 +157,7 @@ class Example(QWidget):
             n += 1  # hehe programowanie
 
         y = doTomography(self.file, float(self.spin1.text().replace(',', '.')), n,
-                     float(self.spin3.text().replace(',', '.')))
+                     float(self.spin3.text().replace(',', '.')), self.doCountLines)
         self.pic.setPixmap(QPixmap(os.getcwd() + "/result.png").scaledToHeight(500))
         self.pic.show()
         self.waiter.hide()
@@ -304,7 +323,7 @@ def getFilterKernel(len):
     return kernel
 
 
-def doTomography(file, alpha, n, l):
+def doTomography(file, alpha, n, l, doCountLines=False):
     # Read image as 64bit float gray scale
     image = misc.imread(file, flatten=True).astype('float64')
     print(image.shape)
@@ -343,6 +362,7 @@ def doTomography(file, alpha, n, l):
 
     print("First iter done!")
     newImage = np.zeros(shape=image.shape, dtype=np.float32)
+    countLines = np.zeros(shape=image.shape, dtype=np.float32)
     border = image.shape[0] - 1
 
     x, y = [], []
@@ -378,14 +398,24 @@ def doTomography(file, alpha, n, l):
                 addValue = 0
             else:
                 addValue = sinogramData[aa][idx] / (len(pixels))
+
                 newImageFlat = np.reshape(newImage, newshape=-1)
                 newPixels = np.array(list(map(lambda x: x[1] + x[0] * image.shape[0], pixels)), dtype=np.uint32)
                 newImageFlat[newPixels] += addValue
                 newImage = np.reshape(newImageFlat, newshape=image.shape)
 
+                countLinesFlat = np.reshape(countLines, newshape=-1)
+                countLinesFlat[newPixels] += 1.0
+                countLines = np.reshape(countLinesFlat, newshape=image.shape)
+
         x.append(aa)
         y.append(RMSE(image, newImage))
 
+    if doCountLines:
+        countLines[countLines == 0.0] = 1.0
+        newImage /= countLines
+
+    print('iks de')
     plt.gcf().clear()
     plt.close()
 
