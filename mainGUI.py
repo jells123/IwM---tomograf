@@ -144,6 +144,10 @@ class Example(QWidget):
         self.spin2.setValue(b)
         self.spin3.setValue(c)
 
+        self.totalA.clear()
+        self.totalN.clear()
+        self.totalL.clear()
+
         self.update()
 
     @pyqtSlot()
@@ -429,9 +433,8 @@ def doTomography(file, alpha, n, l, doCountLines=False):
 
     newImage = normalize2(newImage) * 255
     newImage = ndimage.gaussian_filter(newImage, sigma=0.5)
-    #newImage = normalize(newImage, np.max(image))
+    # newImage = normalize(newImage, np.max(image))
     newImage = cutDownValues(newImage, cutDownValue=np.percentile(newImage, q=60))
-
 
     # Plot the original and the radon transformed image
     plt.subplot(2, 2, 1), plt.imshow(image, cmap='gray')
